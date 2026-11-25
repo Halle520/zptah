@@ -102,6 +102,8 @@ fn run_agy_usage() -> Result<String, FetchError> {
         ws_xpixel: 0,
         ws_ypixel: 0,
     };
+    // `libc::openpty` takes `*mut winsize` on macOS and `*const winsize` on Linux.
+    #[allow(clippy::unnecessary_mut_passed)]
     if unsafe {
         libc::openpty(
             &mut master,
