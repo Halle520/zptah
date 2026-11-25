@@ -16,6 +16,9 @@ pub struct Window {
     pub used_percent: f64,
     pub minutes: u64,
     pub resets_at: Option<i64>,
+    /// The model group a window belongs to, for providers with several groups (Antigravity).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
 }
 impl Window {
     pub fn label(&self) -> String {
@@ -185,7 +188,7 @@ pub fn fetch_with(
         return fetch_pi(model);
     }
     if kind == Kind::Antigravity {
-        return antigravity::fetch();
+        return antigravity::fetch(profile);
     }
     if !kind.subscription_usage() {
         return Err(FetchError::unavailable(format!(
@@ -257,6 +260,7 @@ fn fetch_devin() -> Result<Snapshot, FetchError> {
                 used_percent: (100. - remaining).clamp(0., 100.),
                 minutes,
                 resets_at,
+                group: None,
             });
         }
     }
@@ -334,6 +338,7 @@ fn fetch_pi(model: Option<&str>) -> Result<Snapshot, FetchError> {
                     used_percent: w.used_percent,
                     minutes: w.window_minutes,
                     resets_at: w.resets_at.map(|n| n as i64),
+                    group: None,
                 })
                 .collect(),
             updated_at: now_ms(),
@@ -437,6 +442,7 @@ fn window(value: &Value, minutes: u64, percent_keys: &[&str]) -> Option<Window> 
         used_percent: number(value, percent_keys)?.clamp(0., 100.),
         minutes,
         resets_at: timestamp(&value["resetsAt"]).or_else(|| timestamp(&value["resets_at"])),
+        group: None,
     })
 }
 fn parse_codex(value: &Value) -> Snapshot {
@@ -586,11 +592,13 @@ mod tests {
                     used_percent: 100.,
                     minutes: 300,
                     resets_at: Some(100_000),
+                    group: None,
                 },
                 Window {
                     used_percent: 100.,
                     minutes: 10080,
                     resets_at: Some(200_000),
+                    group: None,
                 },
             ],
             ..Default::default()
@@ -688,6 +696,7 @@ mod tests {
             used_percent: 4.,
             minutes: 300,
             resets_at: None,
+            group: None,
         };
         assert_eq!(w.countdown(0), "5h");
     }

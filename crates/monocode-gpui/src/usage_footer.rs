@@ -689,11 +689,15 @@ impl UsageFooter {
     fn window_card(&self, w: &usage::Window, now: i64) -> gpui::Div {
         let used = w.used_percent.clamp(0., 100.);
         let shown = self.display_percent(used);
-        let label = match w.minutes {
+        let limit = match w.minutes {
             1_440 => "Daily limit",
             10_080 => "Weekly limit",
             43_200 => "Monthly limit",
             _ => "5-hour limit",
+        };
+        let label = match &w.group {
+            Some(group) => format!("{limit} · {group}"),
+            None => limit.to_string(),
         };
         div()
             .rounded_lg()
@@ -710,6 +714,8 @@ impl UsageFooter {
                     .gap_3()
                     .child(
                         div()
+                            .min_w_0()
+                            .truncate()
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(content(0.65))
                             .child(label),
@@ -890,11 +896,15 @@ impl Render for UsageFooter {
                 s.windows
                     .iter()
                     .map(|w| {
-                        format!(
+                        let usage = format!(
                             "{} · {}",
                             self.percent_label(w.used_percent),
                             w.reset_label(now)
-                        )
+                        );
+                        match &w.group {
+                            Some(group) => format!("{group} {usage}"),
+                            None => usage,
+                        }
                     })
                     .collect::<Vec<_>>()
                     .join(" · ")
@@ -1041,6 +1051,7 @@ mod tests {
                         used_percent: 28.,
                         minutes: 300,
                         resets_at: None,
+                        group: None,
                     }],
                     updated_at: usage::now_ms(),
                     ..Default::default()
@@ -1072,6 +1083,7 @@ mod tests {
                         used_percent: 42.,
                         minutes: 300,
                         resets_at: None,
+                        group: None,
                     }],
                     updated_at: usage::now_ms(),
                     ..Default::default()
