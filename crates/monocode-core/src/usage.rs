@@ -8,6 +8,7 @@ mod opencode;
 mod pi;
 
 use crate::{catalog, provider::Kind};
+pub use antigravity::{group_family, GroupFamily};
 use serde_json::Value;
 use std::time::{SystemTime, UNIX_EPOCH};
 

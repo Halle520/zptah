@@ -15,6 +15,25 @@ const ARGS: [&str; 6] = [
     "10s",
 ];
 
+/// The model family of an Antigravity usage group, read from its name.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum GroupFamily {
+    /// Antigravity's own Gemini models.
+    Gemini,
+    /// Claude and GPT models.
+    Claude,
+}
+pub fn group_family(name: &str) -> Option<GroupFamily> {
+    let name = name.to_lowercase();
+    if name.contains("gemini") {
+        Some(GroupFamily::Gemini)
+    } else if name.contains("claude") || name.contains("gpt") {
+        Some(GroupFamily::Claude)
+    } else {
+        None
+    }
+}
+
 pub(super) fn fetch(profile: &Profile) -> Result<Snapshot, FetchError> {
     let binary = provider::resolve(Kind::Antigravity).ok_or_else(|| {
         FetchError::unavailable("Install the agy CLI to check Antigravity usage.")
@@ -98,8 +117,11 @@ fn parse(output: &str, now: i64) -> Result<Snapshot, FetchError> {
         .filter(|command| command.name == "usage")
         .and_then(|command| command.data)
         .ok_or_else(|| FetchError::unavailable("agy returned no usage data."))?;
+    let mut groups = data.groups;
+    // Gemini (Antigravity's own models) first, then Claude and GPT, then anything new.
+    groups.sort_by_key(|group| group_family(&group.name).map_or(2, |family| family as u8));
     let mut windows = Vec::new();
-    for group in data.groups {
+    for group in groups {
         let mut group_windows: Vec<Window> = group
             .buckets
             .iter()
@@ -196,6 +218,27 @@ mod tests {
             Some(ms("2026-11-25T19:26:33Z"))
         );
         assert!((snapshot.windows[3].used_percent - 16.52).abs() < 1e-9);
+    }
+
+    #[test]
+    fn gemini_comes_before_claude_whatever_the_output_order() {
+        let snapshot = parse(
+            r#"{"status":"SUCCESS","command":{"name":"usage","data":{"groups":[
+              {"name":"New models","buckets":[{"id":"n-5h","window":"5h","remaining_fraction":1}]},
+              {"name":"Claude and GPT models","buckets":[{"id":"3p-5h","window":"5h","remaining_fraction":1}]},
+              {"name":"Gemini Models","buckets":[{"id":"gemini-5h","window":"5h","remaining_fraction":1}]}]}}}"#,
+            NOW,
+        )
+        .unwrap();
+        let order: Vec<_> = snapshot
+            .windows
+            .iter()
+            .map(|w| w.group.as_deref().unwrap())
+            .collect();
+        assert_eq!(
+            order,
+            ["Gemini Models", "Claude and GPT models", "New models"]
+        );
     }
 
     #[test]
